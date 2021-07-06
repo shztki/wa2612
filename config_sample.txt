@@ -1,0 +1,243 @@
+! Product: WA2612-AP-ML01
+! Hardware Revision: 2.0
+! Version: 8.5.4
+! Date: 2021/04/25 12:24:43
+!
+boot entry flash wa2600.bin
+!
+syslog enable
+syslog function all warning
+!
+hostname YOURHOSTNAME
+!
+enable password hash XXXXXXXXXXXXXXXXXXXXX
+username admin password hash XXXXXXXXXXXXXXXXXXXXX administrator
+!
+http-username admin password hash XXXXXXXXXXXXXXXXXXXXX administrator
+!
+ip access-list localpolicy permit ip src any dest any
+ip access-list l2tppolicy0 permit ip src any dest 192.168.11.60/32
+ip access-list vpcrouterpolicy0 permit ip src any dest ***.***.***.***/32
+!
+ipv6 access-list block-list deny ip src any dest any
+ipv6 access-list dhcpv6-list permit udp src any sport any dest any dport eq 546
+ipv6 access-list dhcpv6-list permit udp src any sport any dest any dport eq 547
+ipv6 access-list icmpv6-list permit icmp src any dest any
+ipv6 access-list tunnel-list permit 4 src any dest any
+ipv6 access-list dynamic dflt-list permit tcp src any sport any dest any dport any
+ipv6 access-list dynamic dflt-list permit udp src any sport any dest any dport any
+ipv6 access-list dynamic dflt-list permit icmp src any dest any
+!
+!
+!
+ppp profile pppoeprof
+  authentication username XXXXXXXXXXXXXXXXXX
+  authentication password encrypted XXXXXXXXXXXXXXXXXX
+!
+ppp profile lns
+  authentication request chap-pap
+  user-list XXXXX password encrypted XXXXXXXXXXXXXXXXXX
+  ipcp provide-remote-dns 192.168.11.1
+  ipcp provide-ip-address 192.168.11.60
+!
+!
+bridge ieee enable
+!
+ip dhcp-server enable
+ip dhcp-server profile default
+  assignable-range 192.168.11.10 59
+  default-gateway auto
+  dns-server auto
+  subnet-mask auto
+!
+!
+ipv6 dhcp-client profile dhcpv6-cl
+  information-request
+  option-request dns-servers
+!
+!
+ipv6 dhcp-server enable
+!
+ipv6 dhcp-server profile dhcpv6-sv
+!
+!
+route-map LocalPolicy permit 5
+  match ip access-list vpcrouterpolicy0
+  set interface PPPoE0
+!
+route-map LocalPolicy permit 10
+  match ip access-list l2tppolicy0
+  set interface L2TPE0
+!
+route-map LocalPolicy permit 20
+  match ip access-list localpolicy
+  set interface MAPE0
+!
+!
+device usb0
+!
+device module0
+!
+!
+wireless 2g powerlevel 50
+wireless 5g channel anac quad auto
+!
+interface GigaEthernet0.0
+  no ip address
+  ipv6 dhcp-client binding dhcpv6-cl
+  ipv6 enable
+  ipv6 nd proxy GigaEthernet1.0 receive-default
+  ipv6 filter dhcpv6-list 1 in
+  ipv6 filter icmpv6-list 2 in
+  ipv6 filter tunnel-list 3 in
+  ipv6 filter block-list 100 in
+  ipv6 filter dhcpv6-list 1 out
+  ipv6 filter icmpv6-list 2 out
+  ipv6 filter tunnel-list 3 out
+  ipv6 filter dflt-list 100 out
+  encapsulation PPPoE0
+  no shutdown
+!
+interface GigaEthernet1.0
+  ip address 192.168.11.1/24
+  proxy-arp enable
+  ip dhcp-server binding default
+  ipv6 dhcp-server binding dhcpv6-sv
+  ipv6 enable
+  ipv6 nd ra other-config-flag
+  ipv6 nd send-ra
+  bridge ieee 1
+  ip policy route-map LocalPolicy
+  no shutdown
+!
+interface L2TPE0
+  ip address unnumbered GigaEthernet1.0
+  ip tcp adjust-mss auto
+  ppp profile lns
+  l2tp mode lns
+  no shutdown
+!
+interface PPPoE0
+  ip address ipcp
+  ip tcp adjust-mss auto
+  ppp profile pppoeprof
+  auto-connect
+  ipsec map ipsec
+  ip napt enable
+  ip napt reserve udp 500
+  ip napt reserve udp 4500
+  ip napt reserve esp
+  no shutdown
+!
+interface WirelessEthernet0.0
+  ssid SAMPLESSID-A
+  authentication type psk
+  encryption wpa-key encrypted XXXXXXXXXXXXXXXXXX
+  encryption mode wpa2 aes
+  no ip address
+  bridge ieee 1
+  no shutdown
+!
+interface WirelessEthernet0.1
+  ssid SAMPLESSID-B
+  authentication type psk
+  encryption wpa-key encrypted XXXXXXXXXXXXXXXXXX
+  encryption mode wpa2 aes
+  frequency 2g
+  no ip address
+  bridge ieee 1
+  no shutdown
+!
+interface WirelessEthernet0.2
+  ssid SAMPLESSID-C
+  authentication type psk
+  encryption wpa-key encrypted XXXXXXXXXXXXXXXXXX
+  encryption mode wpa2 aes
+  frequency 5g
+  no ip address
+  bridge ieee 1
+  no shutdown
+!
+interface Loopback0.0
+  ip address 127.0.0.1/8
+  no shutdown
+!
+interface Serial0
+  ip address ipcp
+  mobile number *99***CID#
+  auto-connect
+  no shutdown
+!
+interface MobileEthernet0.0
+  no ip address
+  auto-connect
+  shutdown
+!
+interface MAPE0
+  ip address map-e
+  ip tcp adjust-mss auto
+  ip napt enable
+  map-e vne-type ocn
+  map-e enduser-interface GigaEthernet1.0
+  no shutdown
+!
+!
+ip route default PPPoE0
+!
+no mobile expected-attachment usb0 recovery-enable
+!
+proxy-dns ipv6 enable
+proxy-dns server default GigaEthernet0.0 dhcpv6
+!
+!
+!
+ike proposal ike-prop
+  encryption-algorithm aes256-cbc
+  authentication-algorithm hmac-sha2-256
+  lifetime 28800
+  dh-group 2048-bit
+!
+ike policy ike-policy
+  mode main
+  dpd-keepalive enable ph1
+  proposal ike-prop
+  pre-shared-key encrypted XXXXXXXXXXXXXXXXXXXXX
+  nat-traversal enable keepalive 20
+!
+!
+ipsec proposal ipsec-prop
+  protocol esp enc-algo aes256-cbc auth-algo hmac-sha2-256
+  lifetime 28800
+!
+ipsec policy ipsec-policy
+  proposal ipsec-prop
+!
+ipsec profile ipsec
+  mode transport
+  ipsec policy ipsec-policy
+  ike policy ike-policy
+  source PPPoE0
+  peer any
+!
+!
+ssh-server ip enable
+!
+nm ip enable
+nm account XXXXXX password encrypted XXXXXXXXXXXXXXXXXX
+nm ddns notify interface PPPoE0 protocol ip
+!
+!
+!
+https-server ip enable
+https-server ip permit 192.168.11.0/24
+https-server ip redirect enable
+!
+led vpn ipsec
+!
+!
+!
+!
+!
+!
+!
+!
